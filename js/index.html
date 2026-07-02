@@ -1,0 +1,908 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/L.Control.Locate.min.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title>PETA SEBARAN FASILITAS KESEHATAN DI KABUPATEN BANYUMAS </title>
+    </head>
+    <body>
+<marquee behavior="scroll" direction="left" scrollamount="6" style="color: #ff0000; font-weight: bold; font-size: 22px; background-color: rgba(255, 255, 255, 0.85); padding: 12px 0px; position: absolute; top: 0; left: 0; z-index: 1000; width: 100%; border-bottom: 1px solid #ccc; box-shadow: 0px 2px 5px rgba(0,0,0,0.1);">
+            PETA SEBARAN FASILITAS KESEHATAN DI KABUPATEN BANYUMAS - MUTIA ZAHROH 11231010000004 - PEMINATAN EPIDEMIOLOGI
+        </marquee>
+
+        <div id="map">
+        </div>
+<audio controls loop style="position:absolute;bottom:50px;left:30px;z-index:9999;">
+    <source src="audio/backsound.mp3" type="audio/mpeg">
+</audio>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/L.Control.Locate.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="data/KabupatenBanyumas_1.js"></script>
+        <script src="data/FaskesKabBanyumas_2.js"></script>
+        <script>
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        }).fitBounds([[-7.59919975555492,108.79325017412934],[-7.253068786554273,109.47687682808073]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/qgis2web/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var title = new L.Control({'position':'bottomleft'});
+        title.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info');
+            this.update();
+            return this._div;
+        };
+        title.update = function () {
+            this._div.innerHTML = '<h2>PETA SEBARAN FASILITAS KESEHATAN DI KABUPATEN BANYUMAS </h2>';
+        };
+        title.addTo(map);
+        var abstract = new L.Control({'position':'topright'});
+        abstract.onAdd = function (map) {
+            this._div = L.DomUtil.create('div',
+            'leaflet-control abstract');
+            this._div.id = 'abstract'
+                this._div.setAttribute("onmouseenter", "abstract.show()");
+                this._div.setAttribute("onmouseleave", "abstract.hide()");
+                this.hide();
+                return this._div;
+            };
+            abstract.hide = function () {
+                this._div.classList.remove("abstractUncollapsed");
+                this._div.classList.add("abstract");
+                this._div.innerHTML = 'i'
+            }
+            abstract.show = function () {
+                this._div.classList.remove("abstract");
+                this._div.classList.add("abstractUncollapsed");
+                this._div.innerHTML = 'Peta ini menyajikan informasi sebaran fasilitas kesehatan (faskes) di Kabupaten Banyumas yang dapat dieksplorasi secara interaktif. Klik setiap ikon faskes untuk melihat informasi lokasi dan dokumentasi yang tersedia.<br /><br />Sumber Data:<br />- Google Maps (Lokasi Faskes)<br />- Peta Rupa Bumi Indonesia (Batas Kecamatan) - Badan Informasi Geospasial<br /><br />Dibuat oleh:<br />Mutia Zahroh<br />NIM : 11231010000004<br />Peminatan Epidemiologi<br />Program Studi Kesehatan Masyarakat<br />Fakultas Ilmu Kesehatan<br />UIN Syarif Hidayatullah Jakarta<br /><br />Petunjuk penggunaan:<br />- Klik ikon faskes untuk melihat informasi lokasi.<br />- Gunakan fitur Search untuk mencari nama faskes.<br />- Gunakan Measure untuk mengukur jarak dan luas.<br />- Gunakan tombol Layer untuk mengaktifkan atau menonaktifkan layer peta.';
+        };
+        abstract.addTo(map);
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+        }
+        map.createPane('pane_GoogleSatellite_0');
+        map.getPane('pane_GoogleSatellite_0').style.zIndex = 400;
+        var layer_GoogleSatellite_0 = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            pane: 'pane_GoogleSatellite_0',
+            opacity: 1.0,
+            attribution: '',
+            minZoom: 1,
+            maxZoom: 28,
+        });
+        layer_GoogleSatellite_0;
+        map.addLayer(layer_GoogleSatellite_0);
+        function pop_KabupatenBanyumas_1(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">WADMKC</th>\
+                        <td>' + (feature.properties['WADMKC'] !== null ? autolinker.link(String(feature.properties['WADMKC']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">WADMKK</th>\
+                        <td>' + (feature.properties['WADMKK'] !== null ? autolinker.link(String(feature.properties['WADMKK']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Jml_Pend</th>\
+                        <td>' + (feature.properties['Jml_Pend'] !== null ? autolinker.link(String(feature.properties['Jml_Pend']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Kpd_Pend</th>\
+                        <td>' + (feature.properties['Kpd_Pend'] !== null ? autolinker.link(String(feature.properties['Kpd_Pend']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Luas_Ha</th>\
+                        <td>' + (feature.properties['Luas_Ha'] !== null ? autolinker.link(String(feature.properties['Luas_Ha']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_KabupatenBanyumas_1_0(feature) {
+            switch(String(feature.properties['WADMKC'])) {
+                case 'Ajibarang':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(130,205,32,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Banyumas':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(69,71,217,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Baturaden':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(231,85,129,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Cilongok':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(90,152,233,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Gumelar':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(202,76,224,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Jatilawang':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(105,181,222,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Kalibagor':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(229,108,86,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Karanglewas':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(208,20,195,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Kebasen':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(228,77,188,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Kedungbanteng':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(206,95,32,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Kembaran':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(119,210,103,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Kemranjen':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(72,206,195,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Lumbir':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(213,181,64,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Patikraja':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(37,238,94,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Pekuncen':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(182,201,112,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Purwojati':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(100,225,108,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Purwokerto Barat':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(184,117,223,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Purwokerto Selatan':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(202,51,64,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Purwokerto Timur':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(106,236,171,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Purwokerto Utara':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(128,107,211,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Rawalo':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(141,161,234,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Sokaraja':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(18,191,218,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Somagede':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(212,147,62,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Sumbang':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(219,219,111,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Sumpiuh':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(202,112,158,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Tampak':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(178,136,237,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Wangon':
+                    return {
+                pane: 'pane_KabupatenBanyumas_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(69,204,166,1.0)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_KabupatenBanyumas_1');
+        map.getPane('pane_KabupatenBanyumas_1').style.zIndex = 401;
+        map.getPane('pane_KabupatenBanyumas_1').style['mix-blend-mode'] = 'normal';
+        var layer_KabupatenBanyumas_1 = new L.geoJson(json_KabupatenBanyumas_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_KabupatenBanyumas_1',
+            layerName: 'layer_KabupatenBanyumas_1',
+            pane: 'pane_KabupatenBanyumas_1',
+            onEachFeature: pop_KabupatenBanyumas_1,
+            style: style_KabupatenBanyumas_1_0,
+        });
+        bounds_group.addLayer(layer_KabupatenBanyumas_1);
+        map.addLayer(layer_KabupatenBanyumas_1);
+        function pop_FaskesKabBanyumas_2(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td>' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Nama RS</th>\
+                        <td>' + (feature.properties['Nama RS'] !== null ? autolinker.link(String(feature.properties['Nama RS']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Alamat</th>\
+                        <td>' + (feature.properties['Alamat'] !== null ? autolinker.link(String(feature.properties['Alamat']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">No Telp</th>\
+                        <td>' + (feature.properties['No Telp'] !== null ? autolinker.link(String(feature.properties['No Telp']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Jam Buka</th>\
+                        <td>' + (feature.properties['Jam Buka'] !== null ? autolinker.link(String(feature.properties['Jam Buka']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Foto RS'] !== null ? '<img src="images/' + String(feature.properties['Foto RS']).replace(/[\\/:]/g, '_').trim().replace(/'/g, '\'').replace(/"/g, '&quot;') + '">' : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_FaskesKabBanyumas_2_0(feature) {
+            switch(String(feature.properties['Nama RS'])) {
+                case 'General Hospital Medika Lestari':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Hermina Hospital Purwekerto':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas II Cilongok':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas II Tambak':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Kedungbanteng Kabupaten Banyumas':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Lumbir':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Purwokerto Utara I':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Rawalo':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Sumbang II':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'RSU An-Ni\'mah':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'RSU Siaga Medika Banyumas':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'RSU Wiradadi Husada':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'RSUD Ajibarang':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'RSUD Banyumas':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'RSUD Prof. Dr. Margono Soekarjo Purwokerto':
+                    return {
+                pane: 'pane_FaskesKabBanyumas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/FaskesKabBanyumas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_FaskesKabBanyumas_2');
+        map.getPane('pane_FaskesKabBanyumas_2').style.zIndex = 402;
+        map.getPane('pane_FaskesKabBanyumas_2').style['mix-blend-mode'] = 'normal';
+        var layer_FaskesKabBanyumas_2 = new L.geoJson(json_FaskesKabBanyumas_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_FaskesKabBanyumas_2',
+            layerName: 'layer_FaskesKabBanyumas_2',
+            pane: 'pane_FaskesKabBanyumas_2',
+            onEachFeature: pop_FaskesKabBanyumas_2,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_FaskesKabBanyumas_2_0(feature));
+            },
+        });
+        bounds_group.addLayer(layer_FaskesKabBanyumas_2);
+        map.addLayer(layer_FaskesKabBanyumas_2);
+        var overlaysTree = [
+            {label: 'Faskes Kab Banyumas<br /><table><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_GeneralHospitalMedikaLestari0.png" /></td><td>General Hospital Medika Lestari</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_HerminaHospitalPurwekerto1.png" /></td><td>Hermina Hospital Purwekerto</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_PuskesmasIICilongok2.png" /></td><td>Puskesmas II Cilongok</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_PuskesmasIITambak3.png" /></td><td>Puskesmas II Tambak</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_PuskesmasKedungbantengKabupatenBanyumas4.png" /></td><td>Puskesmas Kedungbanteng Kabupaten Banyumas</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_PuskesmasLumbir5.png" /></td><td>Puskesmas Lumbir</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_PuskesmasPurwokertoUtaraI6.png" /></td><td>Puskesmas Purwokerto Utara I</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_PuskesmasRawalo7.png" /></td><td>Puskesmas Rawalo</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_PuskesmasSumbangII8.png" /></td><td>Puskesmas Sumbang II</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_RSUAnNimah9.png" /></td><td>RSU An-Ni\'mah</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_RSUSiagaMedikaBanyumas10.png" /></td><td>RSU Siaga Medika Banyumas</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_RSUWiradadiHusada11.png" /></td><td>RSU Wiradadi Husada</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_RSUDAjibarang12.png" /></td><td>RSUD Ajibarang</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_RSUDBanyumas13.png" /></td><td>RSUD Banyumas</td></tr><tr><td style="text-align: center;"><img src="legend/FaskesKabBanyumas_2_RSUDProfDrMargonoSoekarjoPurwokerto14.png" /></td><td>RSUD Prof. Dr. Margono Soekarjo Purwokerto</td></tr></table>', layer: layer_FaskesKabBanyumas_2},
+            {label: 'Kabupaten Banyumas<br /><table><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Ajibarang0.png" /></td><td>Ajibarang</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Banyumas1.png" /></td><td>Banyumas</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Baturaden2.png" /></td><td>Baturaden</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Cilongok3.png" /></td><td>Cilongok</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Gumelar4.png" /></td><td>Gumelar</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Jatilawang5.png" /></td><td>Jatilawang</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Kalibagor6.png" /></td><td>Kalibagor</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Karanglewas7.png" /></td><td>Karanglewas</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Kebasen8.png" /></td><td>Kebasen</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Kedungbanteng9.png" /></td><td>Kedungbanteng</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Kembaran10.png" /></td><td>Kembaran</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Kemranjen11.png" /></td><td>Kemranjen</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Lumbir12.png" /></td><td>Lumbir</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Patikraja13.png" /></td><td>Patikraja</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Pekuncen14.png" /></td><td>Pekuncen</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Purwojati15.png" /></td><td>Purwojati</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_PurwokertoBarat16.png" /></td><td>Purwokerto Barat</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_PurwokertoSelatan17.png" /></td><td>Purwokerto Selatan</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_PurwokertoTimur18.png" /></td><td>Purwokerto Timur</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_PurwokertoUtara19.png" /></td><td>Purwokerto Utara</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Rawalo20.png" /></td><td>Rawalo</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Sokaraja21.png" /></td><td>Sokaraja</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Somagede22.png" /></td><td>Somagede</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Sumbang23.png" /></td><td>Sumbang</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Sumpiuh24.png" /></td><td>Sumpiuh</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Tampak25.png" /></td><td>Tampak</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenBanyumas_1_Wangon26.png" /></td><td>Wangon</td></tr></table>', layer: layer_KabupatenBanyumas_1},
+            {label: "Google Satellite", layer: layer_GoogleSatellite_0},]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: true,
+        });
+        lay.addTo(map);
+        setBounds();
+        var i = 0;
+        layer_KabupatenBanyumas_1.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['WADMKC'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Arial\', sans-serif;">' + layer.feature.properties['WADMKC']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_KabupatenBanyumas_1'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        resetLabels([layer_KabupatenBanyumas_1]);
+        map.on("zoomend", function(){
+            resetLabels([layer_KabupatenBanyumas_1]);
+        });
+        map.on("layeradd", function(){
+            resetLabels([layer_KabupatenBanyumas_1]);
+        });
+        map.on("layerremove", function(){
+            resetLabels([layer_KabupatenBanyumas_1]);
+        });
+        </script>        
+    </body>
+</html>
